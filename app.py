@@ -3,8 +3,14 @@ import threading
 import time
 
 import streamlit as st
-from streamlit_mic_recorder import speech_to_text
 import paho.mqtt.client as mqtt
+
+# Intentar importar el módulo de micrófono (opcional)
+try:
+    from streamlit_mic_recorder import speech_to_text
+    HAS_MIC = True
+except ModuleNotFoundError:
+    HAS_MIC = False
 
 # =============== CONFIG STREAMLIT ===============
 st.set_page_config(
@@ -143,37 +149,45 @@ with c2:
 
 st.markdown("---")
 
-# =============== CONTROL POR VOZ DE LA LÁMPARA (LED_LAMP) ===============
+# =============== CONTROL POR VOZ DE LA LÁMPARA (SI HAY MÓDULO) ===============
 st.header("🎙️ Control por voz de la lámpara")
 
-st.write("Di algo como: **'encender la lámpara'** o **'apagar la lámpara'**")
+if HAS_MIC:
+    st.write("Di algo como: **'encender la lámpara'** o **'apagar la lámpara'**")
 
-texto = speech_to_text(
-    language="es-ES",
-    use_container_width=True,
-    just_once=True,
-    key="stt_lampara",
-)
+    texto = speech_to_text(
+        language="es-ES",
+        use_container_width=True,
+        just_once=True,
+        key="stt_lampara",
+    )
 
-if texto:
-    st.write("➡️ Reconocido:", texto)
-    frase = texto.lower()
+    if texto:
+        st.write("➡️ Reconocido:", texto)
+        frase = texto.lower()
 
-    encender = any(pal in frase for pal in ["encender", "prender"])
-    apagar = "apagar" in frase
-    contiene_lampara = any(pal in frase for pal in ["lampara", "lámpara"])
+        encender = any(pal in frase for pal in ["encender", "prender"])
+        apagar = "apagar" in frase
+        contiene_lampara = any(pal in frase for pal in ["lampara", "lámpara"])
 
-    if contiene_lampara and encender:
-        mqtt_client.publish(MQTT_TOPIC_CMD_LAMP, "ON")
-        st.success("Comando de voz: **encender lámpara** enviado ✅")
-    elif contiene_lampara and apagar:
-        mqtt_client.publish(MQTT_TOPIC_CMD_LAMP, "OFF")
-        st.success("Comando de voz: **apagar lámpara** enviado ✅")
-    else:
-        st.warning("No entendí un comando claro para la lámpara 😅")
+        if contiene_lampara and encender:
+            mqtt_client.publish(MQTT_TOPIC_CMD_LAMP, "ON")
+            st.success("Comando de voz: **encender lámpara** enviado ✅")
+        elif contiene_lampara and apagar:
+            mqtt_client.publish(MQTT_TOPIC_CMD_LAMP, "OFF")
+            st.success("Comando de voz: **apagar lámpara** enviado ✅")
+        else:
+            st.warning("No entendí un comando claro para la lámpara 😅")
+else:
+    st.info(
+        "El módulo `streamlit_mic_recorder` no está instalado en este entorno.\n\n"
+        "La app sigue funcionando, pero **el control por voz está desactivado**.\n"
+        "Si quieres usar voz en local, instala:\n"
+        "`pip install streamlit-mic-recorder SpeechRecognition`"
+    )
 
-# =============== AUTO-REFRESH CADA 3 s (SIN LIBRERÍAS EXTRAS) ===============
-# Espera 3 segundos y vuelve a ejecutar el script completo
+# =============== AUTO-REFRESH CADA 3 s (SIN LIBRERÍAS EXTRA) ===============
 time.sleep(3)
 st.experimental_rerun()
+
 
