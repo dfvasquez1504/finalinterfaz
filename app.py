@@ -5,13 +5,6 @@ import time
 import streamlit as st
 import paho.mqtt.client as mqtt
 
-# Intentar importar el módulo de micrófono (opcional)
-try:
-    from streamlit_mic_recorder import speech_to_text
-    HAS_MIC = True
-except ModuleNotFoundError:
-    HAS_MIC = False
-
 # =============== CONFIG STREAMLIT ===============
 st.set_page_config(
     page_title="Dashboard IoT – ESP32",
@@ -21,14 +14,15 @@ st.set_page_config(
 
 st.title("🌡️ Dashboard IoT – ESP32 (DHT22, gas, luz, servo, LEDs)")
 
+
 # =============== CONFIG MQTT ===============
 MQTT_BROKER = "broker.mqttdashboard.com"
 MQTT_PORT = 1883
-MQTT_TOPIC_DATA = "Sensor/THP2"           # donde el ESP32 publica los sensores
-MQTT_TOPIC_CMD_VENT = "Sensor/cmd/vent"   # encender/apagar ventilador (LED_VENT)
-MQTT_TOPIC_CMD_LAMP = "Sensor/cmd/lamp"   # encender/apagar lámpara (LED_LAMP)
+MQTT_TOPIC_DATA = "Sensor/THP2"           # datos del ESP32
+MQTT_TOPIC_CMD_VENT = "Sensor/cmd/vent"   # comando ventilador (LED_VENT)
+MQTT_TOPIC_CMD_LAMP = "Sensor/cmd/lamp"   # comando lámpara (LED_LAMP)
 
-# Diccionario global con el último mensaje recibido
+# Últimos datos recibidos
 latest_data = {
     "Temp": None,
     "Hum": None,
@@ -39,7 +33,6 @@ latest_data = {
     "Vent_on": None,
     "Lamp_on": None,
 }
-
 latest_data_lock = threading.Lock()
 
 
@@ -76,7 +69,7 @@ def init_mqtt():
 
 mqtt_client = init_mqtt()
 
-# =============== LECTURA DE DATOS (ÚLTIMO JSON) ===============
+# =============== LEER ÚLTIMO JSON ===============
 with latest_data_lock:
     temp = latest_data.get("Temp")
     hum = latest_data.get("Hum")
@@ -111,7 +104,7 @@ with col3:
 
 st.markdown("---")
 
-# =============== MENSAJES DE SUGERENCIA ===============
+# =============== SUGERENCIAS ===============
 st.header("💡 Sugerencias inteligentes")
 
 if luz is not None:
@@ -133,7 +126,7 @@ if gas_ppm is not None and gas_ppm > 20000:
 
 st.markdown("---")
 
-# =============== CONTROL MANUAL DEL VENTILADOR (LED_VENT) ===============
+# =============== CONTROL MANUAL DEL VENTILADOR ===============
 st.header("🌬️ Control del ventilador (LED del Wokwi)")
 
 c1, c2 = st.columns(2)
@@ -149,44 +142,21 @@ with c2:
 
 st.markdown("---")
 
-# =============== CONTROL POR VOZ DE LA LÁMPARA (SI HAY MÓDULO) ===============
-st.header("🎙️ Control por voz de la lámpara")
+# =============== CONTROL MANUAL DE LA LÁMPARA ===============
+st.header("💡 Control de la lámpara")
 
-if HAS_MIC:
-    st.write("Di algo como: **'encender la lámpara'** o **'apagar la lámpara'**")
+c3, c4 = st.columns(2)
+with c3:
+    if st.button("Encender lámpara"):
+        mqtt_client.publish(MQTT_TOPIC_CMD_LAMP, "ON")
+        st.success("Comando enviado: encender lámpara")
 
-    texto = speech_to_text(
-        language="es-ES",
-        use_container_width=True,
-        just_once=True,
-        key="stt_lampara",
-    )
+with c4:
+    if st.button("Apagar lámpara"):
+        mqtt_client.publish(MQTT_TOPIC_CMD_LAMP, "OFF")
+        st.success("Comando enviado: apagar lámpara")
 
-    if texto:
-        st.write("➡️ Reconocido:", texto)
-        frase = texto.lower()
-
-        encender = any(pal in frase for pal in ["encender", "prender"])
-        apagar = "apagar" in frase
-        contiene_lampara = any(pal in frase for pal in ["lampara", "lámpara"])
-
-        if contiene_lampara and encender:
-            mqtt_client.publish(MQTT_TOPIC_CMD_LAMP, "ON")
-            st.success("Comando de voz: **encender lámpara** enviado ✅")
-        elif contiene_lampara and apagar:
-            mqtt_client.publish(MQTT_TOPIC_CMD_LAMP, "OFF")
-            st.success("Comando de voz: **apagar lámpara** enviado ✅")
-        else:
-            st.warning("No entendí un comando claro para la lámpara 😅")
-else:
-    st.info(
-        "El módulo `streamlit_mic_recorder` no está instalado en este entorno.\n\n"
-        "La app sigue funcionando, pero **el control por voz está desactivado**.\n"
-        "Si quieres usar voz en local, instala:\n"
-        "`pip install streamlit-mic-recorder SpeechRecognition`"
-    )
-
-# =============== AUTO-REFRESH CADA 3 s (SIN LIBRERÍAS EXTRA) ===============
+# =============== AUTO-REFRESH CADA 3 s ===============
 time.sleep(3)
 st.experimental_rerun()
 
