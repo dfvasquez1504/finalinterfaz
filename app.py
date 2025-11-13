@@ -158,7 +158,7 @@ with c4:
 
 # =============== AUTO-REFRESH CADA 3 s ===============
 time.sleep(3)
-st.experimental_rerun()
+st.rerun()
 
 
 
