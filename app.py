@@ -7,12 +7,12 @@ import paho.mqtt.client as mqtt
 
 # =============== CONFIG STREAMLIT ===============
 st.set_page_config(
-    page_title="Dashboard IoT – ESP32",
-    page_icon="🌡️",
+    page_title="Entrega Final",
+    page_icon="😁",
     layout="wide",
 )
 
-st.title("🌡️ Dashboard IoT – ESP32 (DHT22, gas, luz, servo, LEDs)")
+st.title("🌿 EcoSense")
 
 
 # =============== CONFIG MQTT ===============
