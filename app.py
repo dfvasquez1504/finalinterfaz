@@ -1,8 +1,8 @@
 import json
 import threading
+import time
 
 import streamlit as st
-from streamlit_autorefresh import st_autorefresh
 from streamlit_mic_recorder import speech_to_text
 import paho.mqtt.client as mqtt
 
@@ -13,14 +13,14 @@ st.set_page_config(
     layout="wide",
 )
 
-st.title("🌡️ Dashboard IoT – ESP32 (DHT22, gas, luz, servo, LED)")
+st.title("🌡️ Dashboard IoT – ESP32 (DHT22, gas, luz, servo, LEDs)")
 
 # =============== CONFIG MQTT ===============
 MQTT_BROKER = "broker.mqttdashboard.com"
 MQTT_PORT = 1883
 MQTT_TOPIC_DATA = "Sensor/THP2"           # donde el ESP32 publica los sensores
-MQTT_TOPIC_CMD_VENT = "Sensor/cmd/vent"   # para encender/apagar ventilador (LED)
-MQTT_TOPIC_CMD_LAMP = "Sensor/cmd/lamp"   # para encender/apagar lámpara
+MQTT_TOPIC_CMD_VENT = "Sensor/cmd/vent"   # encender/apagar ventilador (LED_VENT)
+MQTT_TOPIC_CMD_LAMP = "Sensor/cmd/lamp"   # encender/apagar lámpara (LED_LAMP)
 
 # Diccionario global con el último mensaje recibido
 latest_data = {
@@ -30,6 +30,8 @@ latest_data = {
     "Gas_ppm": None,
     "Servo_deg": None,
     "LED_temp": None,
+    "Vent_on": None,
+    "Lamp_on": None,
 }
 
 latest_data_lock = threading.Lock()
@@ -48,7 +50,8 @@ def on_message(client, userdata, msg):
         data = json.loads(payload)
         with latest_data_lock:
             for k, v in data.items():
-                latest_data[k] = v
+                if k in latest_data:
+                    latest_data[k] = v
     except Exception as e:
         print("Error procesando mensaje MQTT:", e)
 
@@ -67,10 +70,7 @@ def init_mqtt():
 
 mqtt_client = init_mqtt()
 
-# =============== AUTOREFRESH CADA 3 s ===============
-st_autorefresh(interval=3000, key="sensor_autorefresh")
-
-# =============== LECTURA DE DATOS ===============
+# =============== LECTURA DE DATOS (ÚLTIMO JSON) ===============
 with latest_data_lock:
     temp = latest_data.get("Temp")
     hum = latest_data.get("Hum")
@@ -78,7 +78,10 @@ with latest_data_lock:
     gas_ppm = latest_data.get("Gas_ppm")
     servo_deg = latest_data.get("Servo_deg")
     led_temp_state = latest_data.get("LED_temp")
+    vent_on = latest_data.get("Vent_on")
+    lamp_on = latest_data.get("Lamp_on")
 
+# =============== PANEL DE INDICADORES ===============
 col1, col2, col3 = st.columns(3)
 
 with col1:
@@ -96,8 +99,9 @@ with col2:
 with col3:
     st.subheader("🦾 Servo (válvula)")
     st.metric("Ángulo (°)", f"{servo_deg:.0f}" if servo_deg is not None else "—")
-    st.subheader("🌬️ LED temp / ventilador")
-    st.write("Estado LED temp:", led_temp_state)
+    st.subheader("🌬️ Ventilador / Lámpara")
+    st.write("Ventilador:", "ENCENDIDO" if vent_on else "APAGADO" if vent_on is not None else "—")
+    st.write("Lámpara:", "ENCENDIDA" if lamp_on else "APAGADA" if lamp_on is not None else "—")
 
 st.markdown("---")
 
@@ -123,7 +127,7 @@ if gas_ppm is not None and gas_ppm > 20000:
 
 st.markdown("---")
 
-# =============== CONTROL MANUAL DEL VENTILADOR (LED) ===============
+# =============== CONTROL MANUAL DEL VENTILADOR (LED_VENT) ===============
 st.header("🌬️ Control del ventilador (LED del Wokwi)")
 
 c1, c2 = st.columns(2)
@@ -139,10 +143,10 @@ with c2:
 
 st.markdown("---")
 
-# =============== CONTROL POR VOZ DE LA LÁMPARA ===============
+# =============== CONTROL POR VOZ DE LA LÁMPARA (LED_LAMP) ===============
 st.header("🎙️ Control por voz de la lámpara")
 
-st.write("Di cosas como: **'encender la lámpara'** o **'apagar la lámpara'**")
+st.write("Di algo como: **'encender la lámpara'** o **'apagar la lámpara'**")
 
 texto = speech_to_text(
     language="es-ES",
@@ -167,3 +171,9 @@ if texto:
         st.success("Comando de voz: **apagar lámpara** enviado ✅")
     else:
         st.warning("No entendí un comando claro para la lámpara 😅")
+
+# =============== AUTO-REFRESH CADA 3 s (SIN LIBRERÍAS EXTRAS) ===============
+# Espera 3 segundos y vuelve a ejecutar el script completo
+time.sleep(3)
+st.experimental_rerun()
+
